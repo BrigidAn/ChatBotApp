@@ -113,9 +113,15 @@ public class LoadingScreen extends javax.swing.JFrame {
                     
                     // Animate loading text
                     switch (i % 30) {
-                        case 0 -> loadingLabel.setText("Loading.");
-                        case 10 -> loadingLabel.setText("Loading..");
-                        case 20 -> loadingLabel.setText("Loading...");
+                        case 0:
+                            loadingLabel.setText("Loading.");
+                            break;
+                        case 10:
+                            loadingLabel.setText("Loading..");
+                            break;
+                        case 20:
+                            loadingLabel.setText("Loading...");
+                            break;
                     }
                 } catch (InterruptedException e) {
                     e.printStackTrace();
