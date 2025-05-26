@@ -124,7 +124,7 @@ public class chatBotGUI extends javax.swing.JFrame {
                     date = parts[i];
                 }
             }
-            return searchFlights(from, to, date);
+            ;
         }
 
         return "Sorry, I didn't understand that. Try asking something like: 'Find me a flight from LON to NYC on 2025-07-01'.";
@@ -186,22 +186,20 @@ public class chatBotGUI extends javax.swing.JFrame {
             JScrollBar bar = scrollPane.getVerticalScrollBar();
     SwingUtilities.invokeLater(() -> bar.setValue(bar.getMaximum()));
     }
-     
-    private String searchFlights(String from, String to, String departDate) {
+private String getFlightData(String flightId) {
     try {
         Properties config = loadConfig();
         String apiKey = config.getProperty("RAPIDAPI_KEY");
         String host = config.getProperty("RAPIDAPI_HOST");
 
-        String apiUrl = "https://flights-sky.p.rapidapi.com/google/flights/get-booking-results"
-                        + from + "&arrivalAirportCode=" + to + "&departureDate=" + departDate;
+        String apiUrl = "https://" + host + "///flight-radar1.p.rapidapi.com/flights/get-playback?flightId=2b5accad&timestamp=1648874400/" + flightId; // Replace with actual endpoint
 
         URL url = new URL(apiUrl);
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
 
         conn.setRequestMethod("GET");
-        conn.setRequestProperty("X-RapidAPI-Key", apiKey);
-        conn.setRequestProperty("X-RapidAPI-Host", host);
+        conn.setRequestProperty("x-rapidapi-key", apiKey);
+        conn.setRequestProperty("x-rapidapi-host", host);
 
         int responseCode = conn.getResponseCode();
         if (responseCode != 200) {
@@ -210,23 +208,21 @@ public class chatBotGUI extends javax.swing.JFrame {
 
         BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
         String inputLine;
-        StringBuilder response = new StringBuilder();
-
+        StringBuilder content = new StringBuilder();
         while ((inputLine = in.readLine()) != null) {
-            response.append(inputLine);
+            content.append(inputLine);
         }
-
         in.close();
         conn.disconnect();
 
-        // For demonstration, just return a preview
-        return "✈️ Sample Flight Data: " + response.substring(0, Math.min(500, response.length())) + "...";
+        return content.toString();
 
     } catch (Exception e) {
         e.printStackTrace();
-        return "❌ Error: Exception while fetching flight data.";
+        return "❌ Error: Unable to fetch flight information.";
     }
 }
+
 
 
 
