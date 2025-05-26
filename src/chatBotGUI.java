@@ -14,7 +14,11 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonParser;
-import okhttp3.*;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.util.Properties;
 
 
 /*
@@ -38,42 +42,40 @@ public class chatBotGUI extends javax.swing.JFrame {
         initComponents();
         
         // Set window properties
-      setTitle("Flight ChatBot");
+        setTitle("Flight ChatBot");
         setSize(400, 700);
         setLayout(new BorderLayout());
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        getContentPane().setBackground(new Color(0xE0FBFC)); // Light blue
 
         // Chat panel setup
         chatPanel = new JPanel();
         chatPanel.setLayout(new BoxLayout(chatPanel, BoxLayout.Y_AXIS));
         chatPanel.setBackground(Color.WHITE);
-        chatPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+        chatPanel.setBorder(new EmptyBorder(5, 5, 5, 5));
 
-        // Scroll pane for chat
         scrollPane = new JScrollPane(chatPanel);
         scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
-        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
         scrollPane.setBorder(null);
 
         // Input panel
         JPanel inputPanel = new JPanel(new BorderLayout());
-        inputPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         inputPanel.setBackground(Color.WHITE);
+        inputPanel.setBorder(new EmptyBorder(10, 10, 10, 10));
         userInput = new JTextField();
         JButton sendButton = new JButton("Send");
 
+        sendButton.addActionListener(e -> sendMessage());
+
         inputPanel.add(userInput, BorderLayout.CENTER);
         inputPanel.add(sendButton, BorderLayout.EAST);
-        sendButton.addActionListener(e -> sendMessage());
 
         add(scrollPane, BorderLayout.CENTER);
         add(inputPanel, BorderLayout.SOUTH);
-        setVisible(true);
 
-        // Show welcome message
+        setVisible(true);
         displayMessage("Hi! I'm your flight assistant bot. How can I help you today? ✈️", false);
     }
-    
   
      private void sendMessage() {
         String text = userInput.getText().trim();
@@ -91,7 +93,8 @@ public class chatBotGUI extends javax.swing.JFrame {
                 Thread.sleep(1000);
                 SwingUtilities.invokeLater(() -> {
                     chatPanel.remove(typingLabel);
-                    displayMessage(getBotResponse(text.toLowerCase()), false);
+                    String response = handleInput(text.toLowerCase());
+                    displayMessage(response, false);
                 });
             } catch (InterruptedException e) {
                 e.printStackTrace();
@@ -99,100 +102,133 @@ public class chatBotGUI extends javax.swing.JFrame {
         }).start();
     }
       
-     private JLabel createTypingLabel() {
+    private JLabel createTypingLabel() {
         JLabel label = new JLabel("Bot is typing...");
         label.setFont(new Font("Segoe UI", Font.ITALIC, 14));
         label.setForeground(Color.GRAY);
-        label.setBorder(BorderFactory.createEmptyBorder(5, 15, 5, 15));
+        label.setBorder(new EmptyBorder(5, 15, 5, 15));
         return label;
     }
    
-    private String getBotResponse(String input) {
-        return callChatGPTAPI(input);
-    }
-
-    private String callChatGPTAPI(String userMessage) {
-    try {
-        URL url = new URL("https://api.openai.com/v1/chat/completions");
-        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-
-        conn.setRequestMethod("POST");
-        conn.setRequestProperty("Content-Type", "application/json");
-        conn.setRequestProperty("Authorization", "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");
-        conn.setDoOutput(true);
-
-        JsonObject messageObj = new JsonObject();
-        messageObj.addProperty("role", "user");
-        messageObj.addProperty("content", userMessage);
-
-        JsonArray messagesArray = new JsonArray();
-        messagesArray.add(messageObj);
-
-        JsonObject jsonBody = new JsonObject();
-        jsonBody.addProperty("model", "gpt-3.5-turbo");
-        jsonBody.add("messages", messagesArray);
-
-        try (OutputStream os = conn.getOutputStream()) {
-            byte[] input = jsonBody.toString().getBytes("utf-8");
-            os.write(input, 0, input.length);
-        }
-
-        StringBuilder response;
-        try (BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), "utf-8"))) {
-            response = new StringBuilder();
-            String responseLine;
-            while ((responseLine = br.readLine()) != null) {
-                response.append(responseLine.trim());
+     private String handleInput(String input) {
+        if (input.contains("flight") && input.contains("from") && input.contains("to")) {
+            // Example: "Find me a flight from LON to NYC on 2024-06-15"
+            String[] parts = input.split(" ");
+            String from = "", to = "", date = "2025-07-01"; // Default date
+            for (int i = 0; i < parts.length; i++) {
+                if (parts[i].equals("from") && i + 1 < parts.length) {
+                    from = parts[i + 1].toUpperCase();
+                } else if (parts[i].equals("to") && i + 1 < parts.length) {
+                    to = parts[i + 1].toUpperCase();
+                } else if (parts[i].matches("\\d{4}-\\d{2}-\\d{2}")) {
+                    date = parts[i];
+                }
             }
+            return searchFlights(from, to, date);
         }
 
-        JsonObject jsonResponse = JsonParser.parseString(response.toString()).getAsJsonObject();
-        return jsonResponse.getAsJsonArray("choices")
-                .get(0).getAsJsonObject()
-                .getAsJsonObject("message")
-                .get("content").getAsString();
-
-    } catch (Exception e) {
-        e.printStackTrace();
-        return "Sorry, there was an error connecting to the chatbot API.";
+        return "Sorry, I didn't understand that. Try asking something like: 'Find me a flight from LON to NYC on 2025-07-01'.";
     }
-} 
+    
+  
+     private Properties loadConfig() {
+    Properties prop = new Properties();
+    try (FileInputStream fis = new FileInputStream("config.properties")) {
+        prop.load(fis);
+        System.out.println("✅ Loaded API Key: " + prop.getProperty("RAPIDAPI_KEY"));
+    } catch (Exception e) {
+        System.out.println("❌ Unable to load config.properties");
+        e.printStackTrace();
+    }
+    return prop;
+}
+
+
+
+
+
     
     private void displayMessage(String message, boolean isUser) {
-    JPanel wrapper = new JPanel();
-    wrapper.setLayout(new BoxLayout(wrapper, BoxLayout.X_AXIS));
-    wrapper.setOpaque(false);
+        JPanel wrapper = new JPanel();
+        wrapper.setLayout(new BoxLayout(wrapper, BoxLayout.X_AXIS));
+        wrapper.setOpaque(false);
 
-    JTextArea bubble = new JTextArea(message);
-    bubble.setLineWrap(true);
-    bubble.setWrapStyleWord(true);
-    bubble.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-    bubble.setEditable(false);
-    bubble.setFocusable(false);
-    bubble.setBackground(isUser ? new Color(0xFF6F61) : new Color(0x6A5ACD));
-    bubble.setForeground(Color.WHITE);
-    bubble.setBorder(BorderFactory.createEmptyBorder(10, 14, 10, 14));
-    bubble.setMaximumSize(new Dimension(260, Integer.MAX_VALUE));
+        JTextArea bubble = new JTextArea(message);
+        bubble.setLineWrap(true);
+        bubble.setWrapStyleWord(true);
+        bubble.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        bubble.setEditable(false);
+        bubble.setFocusable(false);
+        bubble.setBackground(isUser ? new Color(0x005f73) : new Color(0x94d2bd));
+        bubble.setForeground(Color.WHITE);
+        bubble.setBorder(new EmptyBorder(6, 10, 6, 10));
+        bubble.setMaximumSize(new Dimension(260, Integer.MAX_VALUE));
+        bubble.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-    if (isUser) {
-        wrapper.add(Box.createHorizontalGlue()); // push to the right
-        wrapper.add(bubble);
-    } else {
-        wrapper.add(bubble);
-        wrapper.add(Box.createHorizontalGlue()); // push to the left
+        if (isUser) {
+            wrapper.add(Box.createHorizontalGlue());
+            wrapper.add(bubble);
+        } else {
+            wrapper.add(bubble);
+            wrapper.add(Box.createHorizontalGlue());
+        }
+
+        chatPanel.add(wrapper);
+        chatPanel.add(Box.createVerticalStrut(10));
+        chatPanel.revalidate();
+        chatPanel.repaint();
+        scrollToBottom();
     }
 
-    chatPanel.add(wrapper);
-    chatPanel.revalidate();
-    chatPanel.repaint();
-    scrollToBottom();
-}
 
      
      private void scrollToBottom() {
             JScrollBar bar = scrollPane.getVerticalScrollBar();
     SwingUtilities.invokeLater(() -> bar.setValue(bar.getMaximum()));
     }
+     
+    private String searchFlights(String from, String to, String departDate) {
+    try {
+        Properties config = loadConfig();
+        String apiKey = config.getProperty("RAPIDAPI_KEY");
+        String host = config.getProperty("RAPIDAPI_HOST");
+
+        String apiUrl = "https://flights-sky.p.rapidapi.com/google/flights/get-booking-results"
+                        + from + "&arrivalAirportCode=" + to + "&departureDate=" + departDate;
+
+        URL url = new URL(apiUrl);
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+
+        conn.setRequestMethod("GET");
+        conn.setRequestProperty("X-RapidAPI-Key", apiKey);
+        conn.setRequestProperty("X-RapidAPI-Host", host);
+
+        int responseCode = conn.getResponseCode();
+        if (responseCode != 200) {
+            return "❌ Error: Failed to fetch flight data. HTTP code " + responseCode;
+        }
+
+        BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+        String inputLine;
+        StringBuilder response = new StringBuilder();
+
+        while ((inputLine = in.readLine()) != null) {
+            response.append(inputLine);
+        }
+
+        in.close();
+        conn.disconnect();
+
+        // For demonstration, just return a preview
+        return "✈️ Sample Flight Data: " + response.substring(0, Math.min(500, response.length())) + "...";
+
+    } catch (Exception e) {
+        e.printStackTrace();
+        return "❌ Error: Exception while fetching flight data.";
+    }
+}
+
+
 
      public static void main(String[] args) {
         SwingUtilities.invokeLater(chatBotGUI::new);
